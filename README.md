@@ -59,7 +59,7 @@ A static image is one frame. "Live" video is the same frames sent in a loop.
 
 ```yaml
 external_components:
-  - source: github://cosmicDustOfLightLength/esphome-ddp-display@main
+  - source: github://cosmicDustOfLightLength/esphome-ddp-display@master
     components: [ddp_display]
 ```
 
