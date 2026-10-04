@@ -1,0 +1,7 @@
+# ddp_test.py  - standard library only
+# ddp_image.py - Pillow (only for loading image files; --pattern needs nothing)
+pillow
+# ddp_video.py
+opencv-python
+numpy
+yt-dlp

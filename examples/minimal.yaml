@@ -1,0 +1,28 @@
+# Minimal usage with any ESPHome display (display::Display with a lambda).
+# Add this to your existing configuration.
+
+external_components:
+  - source: github://cosmicDustOfLightLength/esphome-ddp-display@main
+    components: [ddp_display]
+
+esp32:
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_LWIP_UDP_RECVMBOX_SIZE: "32"   # 64x64 = 9 packets/frame; use 64 for 128x128
+
+wifi:
+  power_save_mode: none
+
+ddp_display:
+  id: ddp
+  width: 64
+  height: 64
+
+display:
+  - platform: ...            # your display
+    id: my_display
+    update_interval: 40ms
+    lambda: |-
+      if (id(ddp).draw(it)) return;
+      // ... normal drawing ...

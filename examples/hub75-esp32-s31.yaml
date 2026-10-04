@@ -1,0 +1,111 @@
+# Full example: ESP32-S31 + 4x HUB75 64x64 panels (2x2 = 128x128) + DDP.
+# Tested with ESPHome 2026.9.1 / ESP-IDF 6.1.0.
+# Fill in pins and secrets, and pick WiFi OR Ethernet (below).
+
+esphome:
+  name: esp32-s31-matrix
+
+esp32:
+  variant: esp32s31            # adjust to your board
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    # esp-hub75 with the flip_buffer() sync fix (PARLIO) + ESP32-S31 support.
+    # A YAML entry takes precedence over the version added by the hub75 component.
+    # After flashing, the boot log MUST contain: "Buffer switch sync: on_buffer_switched"
+    components:
+      - name: esphome/esp-hub75
+        source: https://github.com/cosmicDustOfLightLength/esp-hub75.git
+        ref: esp32s31-support
+        path: components/hub75
+    sdkconfig_options:
+      # UDP socket receive queue (default is only 6!). A 128x128 frame = 35 packets.
+      CONFIG_LWIP_UDP_RECVMBOX_SIZE: "64"
+      CONFIG_LWIP_TCPIP_RECVMBOX_SIZE: "64"
+      # Ethernet (internal EMAC) only: default 20 x 512 B fits only ~6 packets -> bursts get dropped.
+      CONFIG_ETH_DMA_BUFFER_SIZE: "1536"
+      CONFIG_ETH_DMA_RX_BUFFER_NUM: "30"
+
+psram:
+
+logger:
+api:
+ota:
+  - platform: esphome
+
+# ---------- network: WiFi OR Ethernet ----------
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none        # power save delays and drops incoming UDP
+
+# ethernet:
+#   type: YT8531               # ESP32-S31 Function CoreBoard (RGMII)
+#   mdc_pin: GPIO5
+#   mdio_pin: GPIO6
+#   power_pin: GPIO7
+
+external_components:
+  - source: github://cosmicDustOfLightLength/esphome-ddp-display@main
+    components: [ddp_display]
+
+# ---------- DDP ----------
+ddp_display:
+  id: ddp
+  width: 128                   # = display size (or smaller - the rest stays black)
+  height: 128
+  port: 4048
+  timeout: 5s                  # Auto mode: normal display returns after 5 s without frames
+
+# ---------- panel ----------
+display:
+  - platform: hub75
+    id: matrix
+    # ... board / pins / panel_width / panel_height / layout as in your config ...
+    # panel_width: 64
+    # panel_height: 64
+    # layout_rows: 2
+    # layout_cols: 2
+    update_interval: 40ms      # ~25 fps; every refresh picks up the newest DDP frame
+    double_buffer: true        # required - otherwise drawing is visible
+    auto_clear_enabled: false  # DDP overwrites the whole frame; clear manually in the lambda
+    lambda: |-
+      if (id(ddp).draw(it)) return;   // DDP active -> show the network frame
+      it.fill(Color::BLACK);
+      // ... normal screen (clock, sensors, equalizer ...) ...
+
+# ---------- control and diagnostics ----------
+select:
+  - platform: template
+    name: "Display mode"
+    options: ["Auto", "DDP", "Normal"]
+    initial_option: "Auto"
+    optimistic: true
+    restore_value: true
+    on_value:
+      - lambda: id(ddp).set_mode(x);
+
+binary_sensor:
+  - platform: template
+    name: "DDP active"
+    lambda: return id(ddp).is_active();
+
+sensor:
+  - platform: template
+    name: "DDP FPS"
+    unit_of_measurement: fps
+    accuracy_decimals: 1
+    update_interval: 5s
+    lambda: return id(ddp).get_fps();
+  - platform: template
+    name: "DDP packets/s"
+    unit_of_measurement: pkt/s
+    accuracy_decimals: 0
+    update_interval: 5s
+    lambda: return id(ddp).get_packet_rate();
+  - platform: template
+    name: "DDP incomplete frames"
+    accuracy_decimals: 0
+    state_class: total_increasing   # cumulative since boot
+    update_interval: 5s
+    lambda: return id(ddp).get_incomplete_count();

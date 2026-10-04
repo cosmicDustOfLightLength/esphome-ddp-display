@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+tools/ddp_cache/
+ddp_cache/
+tests/host/build/
+.esphome/
+secrets.yaml
